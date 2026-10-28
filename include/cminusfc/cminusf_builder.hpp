@@ -108,6 +108,13 @@ class CminusfBuilder : public ASTVisitor {
     struct {
         // function that is being built
         Function *func = nullptr;
-        // TODO: you should add more fields to store state
+        // depth of compound statements in the current function
+        unsigned int compound_stmt_depth = 0;
+        // used to generate unique basic block names within a function
+        unsigned int block_id = 0;
     } context;
+
+    Value *cast_to_type(Value *val, Type *type);
+    Value *get_var_address(ASTVar &node);
 };
+
