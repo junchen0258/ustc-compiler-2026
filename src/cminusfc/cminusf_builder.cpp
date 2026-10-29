@@ -52,7 +52,10 @@ Value* CminusfBuilder::visit(ASTVarDeclaration &node) {
             ConstantZero::get(var_type, module.get()));
         scope.push(node.id, var);
     } else {
-        auto *var = builder->create_alloca(var_type);
+        auto *current_bb = builder->get_insert_block();
+        builder->set_insert_point(context.func->get_entry_block());
+        auto *var = builder->create_alloca_begin(var_type);
+        builder->set_insert_point(current_bb);
         scope.push(node.id, var);
     }
     return nullptr;
@@ -70,7 +73,10 @@ Value* CminusfBuilder::visit(ASTFunDeclaration &node) {
         ret_type = VOID_T;
 
     for (auto &param : node.params) {
-        // TODO: Please accomplish param_types.
+        Type *param_type = param->type == TYPE_INT ? INT32_T : FLOAT_T;
+        if (param->isarray)
+            param_type = param->type == TYPE_INT ? INT32PTR_T : FLOATPTR_T;
+        param_types.push_back(param_type);
     }
 
     fun_type = FunctionType::get(ret_type, param_types);
@@ -85,7 +91,8 @@ Value* CminusfBuilder::visit(ASTFunDeclaration &node) {
         args.push_back(&arg);
     }
     for (unsigned int i = 0; i < node.params.size(); ++i) {
-        // TODO: You need to deal with params and store them in the scope.
+        context.param = args[i];
+        node.params[i]->accept(*this);
     }
     node.compound_stmt->accept(*this);
     if (not builder->get_insert_block()->is_terminated()) 
@@ -102,8 +109,10 @@ Value* CminusfBuilder::visit(ASTFunDeclaration &node) {
 }
 
 Value* CminusfBuilder::visit(ASTParam &node) {
-    // TODO: This function is empty now.
-    // Add some code here.
+    auto *param_addr = builder->create_alloca_begin(context.param->get_type());
+    builder->create_store(context.param, param_addr);
+    scope.push(node.id, param_addr);
+    context.param = nullptr;
     return nullptr;
 }
 
@@ -245,10 +254,20 @@ Value* CminusfBuilder::visit(ASTVar &node) {
         builder->create_br(valid_bb);
         builder->set_insert_point(valid_bb);
 
-        if (addr->get_type()->get_pointer_element_type()->is_array_type())
+        auto *var_type = addr->get_type()->get_pointer_element_type();
+        if (var_type->is_array_type())
             addr = builder->create_gep(addr, {CONST_INT(0), index});
-        else
+        else if (var_type->is_pointer_type()) {
+            addr = builder->create_load(addr);
             addr = builder->create_gep(addr, {index});
+        } else
+            addr = builder->create_gep(addr, {index});
+    } else {
+        auto *var_type = addr->get_type()->get_pointer_element_type();
+        if (var_type->is_array_type())
+            return builder->create_gep(addr, {CONST_INT(0), CONST_INT(0)});
+        if (var_type->is_pointer_type())
+            return builder->create_load(addr);
     }
     return builder->create_load(addr);
 }
@@ -275,9 +294,13 @@ Value* CminusfBuilder::visit(ASTAssignExpression &node) {
         builder->create_br(valid_bb);
         builder->set_insert_point(valid_bb);
 
-        if (addr->get_type()->get_pointer_element_type()->is_array_type())
+        auto *var_type = addr->get_type()->get_pointer_element_type();
+        if (var_type->is_array_type())
             addr = builder->create_gep(addr, {CONST_INT(0), index});
-        else
+        else if (var_type->is_pointer_type()) {
+            addr = builder->create_load(addr);
+            addr = builder->create_gep(addr, {index});
+        } else
             addr = builder->create_gep(addr, {index});
     }
 

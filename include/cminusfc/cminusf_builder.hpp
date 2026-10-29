@@ -110,11 +110,10 @@ class CminusfBuilder : public ASTVisitor {
         Function *func = nullptr;
         // depth of compound statements in the current function
         unsigned int compound_stmt_depth = 0;
-        // used to generate unique basic block names within a function
+        // used to generate unique basic block names
         unsigned int block_id = 0;
+        // function argument currently being stored for an AST parameter
+        Value *param = nullptr;
     } context;
-
-    Value *cast_to_type(Value *val, Type *type);
-    Value *get_var_address(ASTVar &node);
 };
 
