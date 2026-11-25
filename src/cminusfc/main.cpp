@@ -1,6 +1,7 @@
 #include "Module.hpp"
 #include "ast.hpp"
 #include "cminusf_builder.hpp"
+#include "CodeGen.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -16,6 +17,7 @@ struct Config {
     std::filesystem::path output_file;
 
     bool emitast{false};
+    bool emitasm{false};
     bool emitllvm{false};
 
     Config(int argc, char **argv) : argc(argc), argv(argv) {
@@ -55,9 +57,13 @@ int main(int argc, char **argv) {
             output_stream << "; ModuleID = 'cminus'\n";
             output_stream << "source_filename = " << abs_path << "\n\n";
             output_stream << m->print();
+        } else if (config.emitasm) {
+            CodeGen codegen(m.get());
+            codegen.run();
+            output_stream << codegen.print();
         }
 
-        // TODO: lab3 lab4 (IR optimization or codegen)
+        // TODO: lab4 (IR optimization)
     }
 
     return 0;
@@ -79,6 +85,8 @@ void Config::parse_cmd_line() {
             emitast = true;
         } else if (argv[i] == "-emit-llvm"s) {
             emitllvm = true;
+        } else if (argv[i] == "-S"s) {
+            emitasm = true;
         } else {
             if (input_file.empty()) {
                 input_file = argv[i];
@@ -102,6 +110,8 @@ void Config::check() {
 	*/
     if (output_file.empty()) {
         output_file = input_file.stem();
+        if (emitasm && !emitllvm && !emitast)
+            output_file += ".s";
     }
 }
 
